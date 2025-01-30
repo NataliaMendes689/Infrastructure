@@ -1,0 +1,66 @@
+- hosts: all
+  become: yes
+  tasks:
+    - name: Atualizar o sistema
+      apt:
+        update_cache: yes
+        upgrade: dist
+
+    - name: Instalar Apache
+      apt:
+        name: apache2
+        state: present
+
+    - name: Instalar MySQL
+      apt:
+        name: mysql-server
+        state: present
+
+    - name: Instalar PHP e extensões necessárias
+      apt:
+        name:
+          - php
+          - php-mysql
+          - libapache2-mod-php
+        state: present
+
+    - name: Baixar e configurar WordPress
+      get_url:
+        url: https://wordpress.org/latest.tar.gz
+        dest: /var/www/wordpress.tar.gz
+
+    - name: Extrair WordPress
+      unarchive:
+        src: /var/www/wordpress.tar.gz
+        dest: /var/www/
+        remote_src: yes
+
+    - name: Configurar permissões do WordPress
+      file:
+        path: /var/www/wordpress
+        owner: www-data
+        group: www-data
+        recurse: yes
+
+    - name: Configurar Apache para servir WordPress
+      copy:
+        content: |
+          <VirtualHost *:80>
+              DocumentRoot /var/www/wordpress
+              <Directory /var/www/wordpress>
+                  AllowOverride All
+                  Require all granted
+              </Directory>
+          </VirtualHost>
+        dest: /etc/apache2/sites-available/wordpress.conf
+
+    - name: Habilitar site do WordPress
+      file:
+        src: /etc/apache2/sites-available/wordpress.conf
+        dest: /etc/apache2/sites-enabled/wordpress.conf
+        state: link
+
+    - name: Reiniciar Apache
+      service:
+        name: apache2
+        state: restarted
