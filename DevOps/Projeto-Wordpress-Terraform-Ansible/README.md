@@ -26,16 +26,16 @@ Este projeto provisiona uma instância EC2 na AWS, configura o servidor com Ansi
 
 # Especificação
 
-main.tf: Arquivo principal do Terraform, onde estão os recursos a serem criados (instância EC2, Security Group, etc.).
-outputs.tf: Arquivo para definir as saídas do Terraform (por exemplo, o IP público da instância).
-variables.tf: Arquivo para definir variáveis usadas no Terraform.
-terraform.tfvars: Arquivo para atribuir valores às variáveis definidas em variables.tf.
+- main.tf: Arquivo principal do Terraform, onde estão os recursos a serem criados (instância EC2, Security Group, etc.).
+- outputs.tf: Arquivo para definir as saídas do Terraform (por exemplo, o IP público da instância).
+- variables.tf: Arquivo para definir variáveis usadas no Terraform.
+- terraform.tfvars: Arquivo para atribuir valores às variáveis definidas em variables.tf.
 
-playbook.yml: Playbook do Ansible para instalar e configurar o servidor (por exemplo, Apache, MySQL, WordPress).
-hosts: Arquivo de inventário do Ansible, onde você define os IPs dos servidores a serem configurados.
+- playbook.yml: Playbook do Ansible para instalar e configurar o servidor (por exemplo, Apache, MySQL, WordPress).
+- hosts: Arquivo de inventário do Ansible, onde você define os IPs dos servidores a serem configurados.
 
-docker-compose.yml: Arquivo para configurar e iniciar os contêineres do Prometheus e Grafana.
-prometheus.yml: Arquivo de configuração do Prometheus.
+- docker-compose.yml: Arquivo para configurar e iniciar os contêineres do Prometheus e Grafana.
+- prometheus.yml: Arquivo de configuração do Prometheus.
 
 
 # Como Executar o Projeto
