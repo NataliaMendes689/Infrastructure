@@ -1,0 +1,92 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  WORDPRESS_TF: DevOps/Projeto-Wordpress-Terraform-Ansible/terraform
+  STATIC_TF: DevOps/Projeto-Wordpress-Básico-Pipeline/terraform/s3-bucket-static
+  ANSIBLE_DIR: DevOps/Projeto-Wordpress-Terraform-Ansible/ansible
+  MONITORING_DIR: DevOps/Projeto-Wordpress-Terraform-Ansible/monitoring
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Format check
+        run: terraform fmt -check -recursive
+
+      - name: Validate the WordPress stack
+        run: |
+          terraform -chdir="$WORDPRESS_TF" init -backend=false
+          terraform -chdir="$WORDPRESS_TF" validate
+
+      - name: Validate the static site stack
+        run: |
+          terraform -chdir="$STATIC_TF" init -backend=false
+          terraform -chdir="$STATIC_TF" validate
+
+  ansible:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ansible-lint
+        run: pip install --quiet ansible-lint
+
+      - name: Install collections
+        run: ansible-galaxy collection install -r "$ANSIBLE_DIR/requirements.yml"
+
+      - name: Syntax check
+        run: |
+          cp "$ANSIBLE_DIR/inventory.ini.example" "$ANSIBLE_DIR/inventory.ini"
+          ansible-playbook -i "$ANSIBLE_DIR/inventory.ini" \
+            "$ANSIBLE_DIR/playbook.yml" --syntax-check \
+            -e wordpress_db_password=placeholder-for-syntax-check
+
+      - name: Lint
+        run: ansible-lint "$ANSIBLE_DIR/playbook.yml"
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate the Compose file
+        run: |
+          cp "$MONITORING_DIR/.env.example" "$MONITORING_DIR/.env"
+          docker compose -f "$MONITORING_DIR/docker-compose.yml" \
+            --env-file "$MONITORING_DIR/.env" config --quiet
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Refuse committed state, inventories and real tfvars
+        run: |
+          found=$(git ls-files \
+            | grep -E '(\.tfstate|\.tfstate\.backup|^.*\/inventory\.ini$|^.*\/hosts$|\.pem$|\.key$|^\.env$)' \
+            | grep -v '\.example$' || true)
+          if [ -n "$found" ]; then
+            echo "These files must not be committed:"
+            echo "$found"
+            exit 1
+          fi
+          echo "No sensitive files tracked."

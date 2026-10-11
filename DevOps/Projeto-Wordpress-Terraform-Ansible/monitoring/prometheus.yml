@@ -1,7 +1,16 @@
 global:
   scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: wordpress-lab
 
 scrape_configs:
-  - job_name: 'node'
+  - job_name: prometheus
     static_configs:
-      - targets: ['localhost:9100']
+      - targets: ["localhost:9090"]
+
+  # Resolved over the compose network by service name. "localhost" here would
+  # point at the Prometheus container itself.
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]

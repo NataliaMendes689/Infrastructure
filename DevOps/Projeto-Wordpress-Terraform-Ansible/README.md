@@ -1,61 +1,42 @@
-# Projeto de Infraestrutura com Terraform, Ansible e Monitoramento
+# WordPress on AWS — Terraform, Ansible and monitoring
 
-Este projeto provisiona uma instância EC2 na AWS, configura o servidor com Ansible e configura monitoramento com Prometheus e Grafana.
+Provisioning, configuration and observability for a single-instance WordPress server.
 
-## Requisitos
+| Folder | Responsibility |
+| --- | --- |
+| `terraform/` | EC2 instance, security group, encrypted root volume, IMDSv2 |
+| `ansible/` | Apache, MySQL, PHP, WordPress, virtual host, `wp-config.php` |
+| `monitoring/` | Prometheus, node-exporter and Grafana over Compose |
 
-- Terraform instalado
-- Ansible instalado
-- Docker instalado
+Run instructions and the reasoning behind each design choice are in the
+[repository README](../../README.md).
 
-## Como usar
+## Layout
 
-1. Provisionamento com Terraform:
-   - Entre na pasta terraform/.
-   - Execute terraform init para inicializar o Terraform.
-   - Execute terraform apply para criar a infraestrutura.
+```
+terraform/
+  versions.tf                required_version and provider constraints
+  variables.tf               inputs, with validation
+  main.tf                    provider, AMI lookup, instance
+  security.tf                security group and its rules
+  outputs.tf                 IP, DNS, AMI id, ready-made Ansible inventory
+  terraform.tfvars.example   copy to terraform.tfvars, which is gitignored
 
-2. Configuração do servidor com Ansible:
-   - Entre na pasta ansible/.
-   - Execute ansible-playbook -i hosts playbook.yml.
+ansible/
+  playbook.yml               the full install, idempotent
+  wp-config.php.j2           templated config with salts fetched at run time
+  requirements.yml           community.mysql and community.general
+  inventory.ini.example      copy to inventory.ini, which is gitignored
 
-3. Monitoramento com Prometheus e Grafana:
-   - Entre na pasta monitoring/.
-   - Execute docker-compose up -d para iniciar os contêineres.
-   - Acesse o Grafana em http://<IP_DO_SERVIDOR>:3000. # Pegar no arquivo hosts
+monitoring/
+  docker-compose.yml         prometheus, node-exporter, grafana
+  prometheus.yml             scrape config
+  grafana/provisioning/      datasource wired up on first boot
+  .env.example               copy to .env, which is gitignored
+```
 
-# Especificação
+## Known limits
 
-- main.tf: Arquivo principal do Terraform, onde estão os recursos a serem criados (instância EC2, Security Group, etc.).
-- outputs.tf: Arquivo para definir as saídas do Terraform (por exemplo, o IP público da instância).
-- variables.tf: Arquivo para definir variáveis usadas no Terraform.
-- terraform.tfvars: Arquivo para atribuir valores às variáveis definidas em variables.tf.
-
-- playbook.yml: Playbook do Ansible para instalar e configurar o servidor (por exemplo, Apache, MySQL, WordPress).
-- hosts: Arquivo de inventário do Ansible, onde você define os IPs dos servidores a serem configurados.
-
-- docker-compose.yml: Arquivo para configurar e iniciar os contêineres do Prometheus e Grafana.
-- prometheus.yml: Arquivo de configuração do Prometheus.
-
-
-# Como Executar o Projeto
-
-## Provisionamento com Terraform:
-
-1. Entre na pasta terraform/.
-
-2. Execute terraform init e terraform apply.
-
-
-## Configuração do servidor com Ansible (opcional):
-
-1. Entre na pasta ansible/.
-
-2. Execute ansible-playbook -i hosts playbook.yml.
-
-
-## Monitoramento com Prometheus e Grafana:
-
-1. Entre na pasta monitoring/.
-
-2. Execute docker-compose up -d
+Single instance, no load balancer, no managed database, no TLS termination. State is
+local, so this is a single-operator lab rather than a team setup — an S3 backend with
+DynamoDB locking is the first thing to add before anyone else touches it.

@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored.
+
+key_name          = "your-ec2-key-pair-name"
+ssh_allowed_cidrs = ["203.0.113.4/32"] # your address, never 0.0.0.0/0
+
+# aws_region          = "us-east-1"
+# project_name        = "wordpress-lab"
+# environment         = "lab"
+# instance_type       = "t3.micro"
+# root_volume_size_gb = 16

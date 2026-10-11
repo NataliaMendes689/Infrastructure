@@ -1,0 +1,34 @@
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+!*.tfvars.example
+override.tf
+override.tf.json
+.terraformrc
+terraform.rc
+
+# Ansible
+inventory.ini
+hosts
+*.retry
+vault-password*
+group_vars/**/vault.yml
+
+# Secrets and environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.ppk
+
+# Local tooling
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+node_modules/

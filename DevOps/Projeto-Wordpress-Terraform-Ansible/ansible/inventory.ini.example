@@ -1,0 +1,9 @@
+# Copy to inventory.ini and fill in the address printed by
+#   terraform -chdir=../terraform output ansible_inventory
+# inventory.ini is gitignored so a real address never reaches the repository.
+
+[webserver]
+203.0.113.4 ansible_user=ubuntu
+
+[webserver:vars]
+ansible_ssh_private_key_file=~/.ssh/your-key.pem

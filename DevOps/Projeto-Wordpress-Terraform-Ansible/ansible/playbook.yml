@@ -1,66 +1,145 @@
-- hosts: all
-  become: yes
+---
+- name: Provision WordPress on Ubuntu
+  hosts: webserver
+  become: true
+
+  vars:
+    wordpress_root: /var/www/wordpress
+    wordpress_archive: /tmp/wordpress.tar.gz
+    wordpress_db_name: wordpress
+    wordpress_db_user: wordpress
+
+  pre_tasks:
+    - name: Fail early when the database password was not supplied
+      ansible.builtin.assert:
+        that:
+          - wordpress_db_password is defined
+          - wordpress_db_password | length >= 12
+        fail_msg: >-
+          wordpress_db_password must be provided and at least 12 characters.
+          Use ansible-vault, or pass -e wordpress_db_password=...
+        quiet: true
+
+    - name: Refresh the package index
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
   tasks:
-    - name: Atualizar o sistema
-      apt:
-        update_cache: yes
-        upgrade: dist
-
-    - name: Instalar Apache
-      apt:
-        name: apache2
-        state: present
-
-    - name: Instalar MySQL
-      apt:
-        name: mysql-server
-        state: present
-
-    - name: Instalar PHP e extensões necessárias
-      apt:
+    - name: Install Apache, MySQL, PHP and the MySQL client library for Ansible
+      ansible.builtin.apt:
         name:
+          - apache2
+          - mysql-server
           - php
           - php-mysql
           - libapache2-mod-php
+          - python3-pymysql
         state: present
 
-    - name: Baixar e configurar WordPress
-      get_url:
+    - name: Ensure MySQL is running and enabled
+      ansible.builtin.service:
+        name: mysql
+        state: started
+        enabled: true
+
+    - name: Create the WordPress database
+      community.mysql.mysql_db:
+        name: "{{ wordpress_db_name }}"
+        state: present
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+
+    - name: Create the WordPress database user
+      community.mysql.mysql_user:
+        name: "{{ wordpress_db_user }}"
+        password: "{{ wordpress_db_password }}"
+        priv: "{{ wordpress_db_name }}.*:ALL"
+        host: localhost
+        state: present
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+      no_log: true
+
+    - name: Download WordPress
+      ansible.builtin.get_url:
         url: https://wordpress.org/latest.tar.gz
-        dest: /var/www/wordpress.tar.gz
+        dest: "{{ wordpress_archive }}"
+        mode: "0644"
 
-    - name: Extrair WordPress
-      unarchive:
-        src: /var/www/wordpress.tar.gz
+    # creates: makes this a no-op on reruns. Without it the playbook re-extracts
+    # the archive over the live site on every execution.
+    - name: Extract WordPress
+      ansible.builtin.unarchive:
+        src: "{{ wordpress_archive }}"
         dest: /var/www/
-        remote_src: yes
+        remote_src: true
+        creates: "{{ wordpress_root }}/index.php"
 
-    - name: Configurar permissões do WordPress
-      file:
-        path: /var/www/wordpress
+    - name: Fetch unique salts from the WordPress API
+      ansible.builtin.uri:
+        url: https://api.wordpress.org/secret-key/1.1/salt/
+        return_content: true
+      register: wordpress_salts
+      changed_when: false
+      check_mode: false
+
+    - name: Write wp-config.php
+      ansible.builtin.template:
+        src: wp-config.php.j2
+        dest: "{{ wordpress_root }}/wp-config.php"
         owner: www-data
         group: www-data
-        recurse: yes
+        mode: "0640"
+      no_log: true
+      notify: Restart Apache
 
-    - name: Configurar Apache para servir WordPress
-      copy:
+    - name: Own the site as www-data
+      ansible.builtin.file:
+        path: "{{ wordpress_root }}"
+        owner: www-data
+        group: www-data
+        recurse: true
+        state: directory
+
+    - name: Install the Apache virtual host
+      ansible.builtin.copy:
+        dest: /etc/apache2/sites-available/wordpress.conf
+        owner: root
+        group: root
+        mode: "0644"
         content: |
           <VirtualHost *:80>
-              DocumentRoot /var/www/wordpress
-              <Directory /var/www/wordpress>
+              DocumentRoot {{ wordpress_root }}
+              <Directory {{ wordpress_root }}>
                   AllowOverride All
                   Require all granted
               </Directory>
+              ErrorLog ${APACHE_LOG_DIR}/wordpress-error.log
+              CustomLog ${APACHE_LOG_DIR}/wordpress-access.log combined
           </VirtualHost>
-        dest: /etc/apache2/sites-available/wordpress.conf
+      notify: Restart Apache
 
-    - name: Habilitar site do WordPress
-      file:
-        src: /etc/apache2/sites-available/wordpress.conf
-        dest: /etc/apache2/sites-enabled/wordpress.conf
-        state: link
+    - name: Enable mod_rewrite, required by WordPress permalinks
+      community.general.apache2_module:
+        name: rewrite
+        state: present
+      notify: Restart Apache
 
-    - name: Reiniciar Apache
-      service:
+    - name: Enable the WordPress site
+      ansible.builtin.command: a2ensite wordpress.conf
+      args:
+        creates: /etc/apache2/sites-enabled/wordpress.conf
+      notify: Restart Apache
+
+    - name: Disable the default site
+      ansible.builtin.command: a2dissite 000-default.conf
+      args:
+        removes: /etc/apache2/sites-enabled/000-default.conf
+      notify: Restart Apache
+
+  handlers:
+    # A handler fires once, at the end, and only when something changed. The
+    # original playbook restarted Apache unconditionally on every run.
+    - name: Restart Apache
+      ansible.builtin.service:
         name: apache2
         state: restarted
