@@ -1,6 +1,7 @@
 ---
 collections:
-  - name: community.mysql
-    version: ">=3.9.0"
+  # community.mysql is deprecated on Galaxy; ansible.mysql is the canonical successor.
+  - name: ansible.mysql
+    version: ">=5.2.0"
   - name: community.general
     version: ">=9.0.0"
